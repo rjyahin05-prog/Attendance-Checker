@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>Yahin Smart Attendance</title>
+  <!-- Load MediaPipe Face Detection from official CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
   <style>
     :root {
       --primary: #2563eb;
@@ -55,9 +58,9 @@
     .thumb-tag { font-size: 10px; font-weight: 600; margin-top: 2px; }
 
     .unrecognized-box { border: 2px solid #fdba74; background: #fff7ed; padding: 14px; border-radius: 8px; margin-top: 14px; display: none; }
-    .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; max-height: 320px; overflow-y: auto; }
+    .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; max-height: 340px; overflow-y: auto; }
     .face-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; text-align: center; background: #ffffff; }
-    .face-card canvas { border-radius: 50%; width: 70px; height: 70px; object-fit: cover; border: 2px solid var(--primary); }
+    .face-card canvas { border-radius: 50%; width: 75px; height: 75px; object-fit: cover; border: 2px solid var(--primary); }
     .face-card input { width: 90%; margin-top: 5px; padding: 5px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; }
 
     table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
@@ -75,18 +78,18 @@
   <h2>Yahin Smart Attendance</h2>
   
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('enroll')">1. Roster Tagging (Camera)</button>
+    <button class="tab-btn active" onclick="switchTab('enroll')">1. Roster Tagging</button>
     <button class="tab-btn" onclick="switchTab('attend')">2. Live Class Session</button>
     <button class="tab-btn" onclick="switchTab('records')">3. Detailed Log & Absence Matrix</button>
   </div>
 
-  <!-- TAB 1: INSTANT ENROLLMENT -->
+  <!-- TAB 1: FAST GROUP ENROLLMENT -->
   <div id="enrollSection" class="section active">
     <div class="toolbar">
       <button class="btn" id="enrollSnapBtn" onclick="snapEnrollmentFromCamera()">📷 Snap Group Roster from Camera</button>
       <button class="btn btn-green" onclick="saveEnrolledFaces()">Save Tagged Roster</button>
       <button class="btn btn-red btn-sm" onclick="clearEntireRoster()">Clear Current Roster</button>
-      <span style="font-size: 12px; color: #64748b; margin-left: 10px;">Or upload file:</span>
+      <span style="font-size: 12px; color: #64748b; margin-left: 10px;">Or upload group picture:</span>
       <input type="file" id="groupPhotoUpload" accept="image/*" style="font-size:12px;">
     </div>
 
@@ -151,7 +154,7 @@
 
     <div id="unrecognizedBox" class="unrecognized-box">
       <h4 style="margin:0 0 6px 0; color:#9a3412;">⚠️ Unregistered Face Detected</h4>
-      <p style="font-size:12px; margin:0 0 8px 0; color:#7c2d12;">Tag latecomers or absentees now to add them permanently:</p>
+      <p style="font-size:12px; margin:0 0 8px 0; color:#7c2d12;">Was this student absent during enrollment? Tag them now to enroll them permanently and count them present today:</p>
       <div id="unrecognizedFaceList" class="face-grid"></div>
     </div>
   </div>
@@ -186,11 +189,10 @@
     </table>
   </div>
 
-  <p id="status">Connecting webcam...</p>
+  <p id="status">Starting camera & MediaPipe AI engine...</p>
 </div>
 
 <script>
-  // Paste your Apps Script Web App URL below
   const APPS_SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
 
   let enrolledRoster = JSON.parse(localStorage.getItem("enrolled_roster") || "[]");
@@ -203,42 +205,78 @@
   let activeFilter = "ALL";
   let sharedStream = null;
 
-  // Native browser hardware FaceDetector
-  let nativeDetector = null;
-  if ('FaceDetector' in window) {
-    try {
-      nativeDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 50 });
-    } catch(e) { console.warn("Native detector initialization:", e); }
-  }
+  // MediaPipe Face Detector instance
+  let faceDetector = null;
+  let detectorReady = false;
 
   async function init() {
-    const status = document.getElementById("status");
     await startCamera();
+
+    // Initialize MediaPipe Face Detection
+    faceDetector = new FaceDetection({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
+    });
+
+    faceDetector.setOptions({
+      model: 'full', // Full-range model designed for wide shots, multiple people, and back rows
+      minDetectionConfidence: 0.4
+    });
+
+    await faceDetector.initialize();
+    detectorReady = true;
+
     updateLiveChecklist();
     renderLocalRecords();
-    status.innerText = `System ready! ${enrolledRoster.length} student(s) enrolled in local database.`;
+    document.getElementById("status").innerText = `✓ MediaPipe AI Ready. ${enrolledRoster.length} student(s) currently enrolled.`;
   }
 
   async function startCamera() {
-    const status = document.getElementById("status");
     try {
       sharedStream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }
       });
       document.getElementById('enrollWebcam').srcObject = sharedStream;
       document.getElementById('sessionWebcam').srcObject = sharedStream;
-      status.innerText = "Camera active. Ready to tag or take attendance.";
     } catch (e) {
-      status.innerText = "Please allow camera access in browser permissions.";
+      document.getElementById("status").innerText = "Camera permission denied or camera not available.";
       console.error(e);
     }
   }
 
-  // --- FAST FEATURE EXTRACTION (Runs instantly, zero external downloads) ---
+  // --- MEDIAPIPE MULTI-FACE DETECTION WRAPPER ---
+  function detectFacesMediaPipe(imageOrCanvas) {
+    return new Promise((resolve) => {
+      faceDetector.onResults((results) => {
+        if (!results.detections || results.detections.length === 0) {
+          resolve([]);
+          return;
+        }
+
+        const w = imageOrCanvas.videoWidth || imageOrCanvas.width;
+        const h = imageOrCanvas.videoHeight || imageOrCanvas.height;
+
+        // Convert normalized relative bounding boxes to absolute pixel coordinates
+        const boxes = results.detections.map(d => {
+          const bb = d.boundingBox;
+          return {
+            x: Math.max(0, Math.floor(bb.xCenter * w - (bb.width * w) / 2)),
+            y: Math.max(0, Math.floor(bb.yCenter * h - (bb.height * h) / 2)),
+            width: Math.min(w, Math.floor(bb.width * w)),
+            height: Math.min(h, Math.floor(bb.height * h))
+          };
+        });
+
+        resolve(boxes);
+      });
+
+      faceDetector.send({ image: imageOrCanvas });
+    });
+  }
+
+  // Fast biometric color/structure hashing for matching
   function computeFaceFingerprint(canvas) {
     const ctx = canvas.getContext('2d');
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imgData.data;
+    const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
     const grid = 8;
     const cellW = canvas.width / grid;
     const cellH = canvas.height / grid;
@@ -277,37 +315,10 @@
     return Math.sqrt(sum) / v1.length;
   }
 
-  // Fallback heuristic detection if browser doesn't have Shape Detection API
-  async function detectFaceBoxes(sourceElement) {
-    if (nativeDetector) {
-      try {
-        const faces = await nativeDetector.detect(sourceElement);
-        if (faces && faces.length > 0) {
-          return faces.map(f => ({
-            x: f.boundingBox.x,
-            y: f.boundingBox.y,
-            width: f.boundingBox.width,
-            height: f.boundingBox.height
-          }));
-        }
-      } catch (e) {
-        console.warn("Native detection fallback:", e);
-      }
-    }
-
-    // High-speed center & quadrant crop fallback for instant tagging
-    const w = sourceElement.videoWidth || sourceElement.width;
-    const h = sourceElement.videoHeight || sourceElement.height;
-    const boxSize = Math.floor(Math.min(w, h) * 0.4);
-    return [
-      { x: Math.floor((w - boxSize) / 2), y: Math.floor((h - boxSize) / 2), width: boxSize, height: boxSize }
-    ];
-  }
-
-  // --- 1. ENROLLMENT ---
+  // --- 1. ROSTER ENROLLMENT ---
   async function snapEnrollmentFromCamera() {
     const video = document.getElementById('enrollWebcam');
-    if (!video.videoWidth) return alert("Camera not ready yet.");
+    if (!video.videoWidth) return alert("Camera not ready.");
 
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
@@ -330,15 +341,29 @@
     faceList.innerHTML = "";
     tempExtractedFeatures = [];
 
-    status.innerText = "Analyzing frame...";
-    const boxes = await detectFaceBoxes(sourceCanvas);
+    status.innerText = "Scanning all faces in group photo with MediaPipe...";
+    const boxes = await detectFacesMediaPipe(sourceCanvas);
+
+    if (boxes.length === 0) {
+      status.innerText = "No faces found in this picture. Try adjusting lighting or angle.";
+      return;
+    }
 
     boxes.forEach((box, i) => {
       const crop = document.createElement('canvas');
       crop.width = 100;
       crop.height = 100;
       const ctx = crop.getContext('2d');
-      ctx.drawImage(sourceCanvas, box.x, box.y, box.width, box.height, 0, 0, 100, 100);
+      // Add slight padding to face bounding box
+      const pad = Math.floor(box.width * 0.1);
+      ctx.drawImage(
+        sourceCanvas,
+        Math.max(0, box.x - pad),
+        Math.max(0, box.y - pad),
+        box.width + pad * 2,
+        box.height + pad * 2,
+        0, 0, 100, 100
+      );
 
       const vector = computeFaceFingerprint(crop);
       tempExtractedFeatures.push(vector);
@@ -355,7 +380,7 @@
       faceList.appendChild(card);
     });
 
-    status.innerText = `Spotted ${boxes.length} face region(s)! Type their names and click 'Save Tagged Roster'.`;
+    status.innerText = `Detected ALL ${boxes.length} people in photo! Type their names and click 'Save Tagged Roster'.`;
   }
 
   function fileToCanvas(file) {
@@ -364,7 +389,7 @@
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          const maxDim = 1200;
+          const maxDim = 1400;
           let w = img.width, h = img.height;
           if (w > maxDim || h > maxDim) {
             if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
@@ -421,7 +446,7 @@
     const shotIdx = stagedImages.length;
     stagedImages.push(imgBase64);
 
-    const boxes = await detectFaceBoxes(canvas);
+    const boxes = await detectFacesMediaPipe(canvas);
 
     boxes.forEach((box, i) => {
       const crop = document.createElement('canvas');
@@ -431,7 +456,6 @@
 
       const vector = computeFaceFingerprint(crop);
 
-      // Match against enrolled
       let bestName = null;
       let minDistance = 9999;
       enrolledRoster.forEach(student => {
@@ -442,7 +466,6 @@
         }
       });
 
-      // Threshold match check
       if (bestName && minDistance < 18.0) {
         if (!stagedPresentStudents.has(bestName)) {
           stagedPresentStudents.set(bestName, { photoIndex: shotIdx });
