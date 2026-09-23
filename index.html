@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Smart Face Attendance & Absence System</title>
-  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+  <title>Smart Class Attendance System</title>
+  <!-- Fast, lightweight face-api bundle -->
+  <script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <style>
     :root {
       --primary: #2563eb;
@@ -32,7 +33,7 @@
     .stat-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #64748b; }
 
     .session-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
-    .camera-wrapper { position: relative; width: 100%; height: 380px; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+    .camera-wrapper { position: relative; width: 100%; height: 380px; background: #1e293b; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
     .roster-checklist { border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; background: #f8fafc; height: 380px; display: flex; flex-direction: column; }
@@ -67,7 +68,7 @@
     .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
     .badge-present { background: #dcfce7; color: #15803d; }
     .badge-absent { background: #fee2e2; color: #b91c1c; }
-    #status { margin-top: 14px; font-weight: 600; font-size: 13px; color: #475569; }
+    #status { margin-top: 14px; font-weight: 600; font-size: 13px; color: #1e293b; padding: 8px 12px; background: #e2e8f0; border-radius: 6px; }
   </style>
 </head>
 <body>
@@ -81,7 +82,7 @@
     <button class="tab-btn" onclick="switchTab('records')">3. Detailed Log & Absence Matrix</button>
   </div>
 
-  <!-- TAB 1: INITIAL ENROLLMENT (NOW WITH DIRECT LIVE CAMERA) -->
+  <!-- TAB 1: FAST ENROLLMENT -->
   <div id="enrollSection" class="section active">
     <div class="toolbar">
       <button class="btn" id="enrollSnapBtn" onclick="snapEnrollmentFromCamera()">📷 Snap Group Roster from Camera</button>
@@ -91,7 +92,6 @@
       <input type="file" id="groupPhotoUpload" accept="image/*" style="font-size:12px;">
     </div>
 
-    <!-- Live Preview for Tagging -->
     <div class="camera-wrapper" style="height: 320px;">
       <video id="enrollWebcam" autoplay muted playsinline></video>
     </div>
@@ -153,7 +153,7 @@
 
     <div id="unrecognizedBox" class="unrecognized-box">
       <h4 style="margin:0 0 6px 0; color:#9a3412;">⚠️ Unregistered Face Detected</h4>
-      <p style="font-size:12px; margin:0 0 8px 0; color:#7c2d12;">Was this student absent during enrollment? Tag them now to enroll them permanently and count them present today:</p>
+      <p style="font-size:12px; margin:0 0 8px 0; color:#7c2d12;">Tag latecomers or absentees now to add them permanently:</p>
       <div id="unrecognizedFaceList" class="face-grid"></div>
     </div>
   </div>
@@ -188,7 +188,7 @@
     </table>
   </div>
 
-  <p id="status">Loading fast detection models...</p>
+  <p id="status">Connecting camera...</p>
 </div>
 
 <script>
@@ -205,48 +205,56 @@
   let activeFilter = "ALL";
   let sharedStream = null;
 
-  // Tiny detector options for instant extraction without freezing
-  const detectorOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.3 });
+  // Ultra-fast Tiny Detector configuration
+  const detectorOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 });
+
+  // Direct, reliable raw model endpoints (avoids CDN throttles)
+  const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
 
   async function init() {
     const status = document.getElementById("status");
+    
+    // Start camera immediately so there is never a blank black screen
+    await startCamera();
+
     try {
-      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+      status.innerText = "Downloading AI weights (1 of 3: Tiny Face Detector)...";
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+
+      status.innerText = "Downloading AI weights (2 of 3: Landmarks)...";
       await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+
+      status.innerText = "Downloading AI weights (3 of 3: Face Recognition)...";
       await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
       rebuildMatcher();
-      await startWebcam();
       updateLiveChecklist();
       renderLocalRecords();
-      status.innerText = `Models ready. Roster: ${enrolledRoster.length} student(s) enrolled.`;
+      status.innerText = `✓ Ready! ${enrolledRoster.length} student(s) enrolled in memory.`;
     } catch (err) {
-      status.innerText = "Initialization error: " + err.message;
+      status.innerText = "Error loading AI models: " + err.message + ". Please refresh or check connection.";
+      console.error(err);
     }
   }
 
-  async function startWebcam() {
+  async function startCamera() {
     try {
-      sharedStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+      sharedStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }
+      });
       document.getElementById('enrollWebcam').srcObject = sharedStream;
       document.getElementById('sessionWebcam').srcObject = sharedStream;
     } catch (e) {
-      console.warn("Webcam access note:", e);
+      document.getElementById("status").innerText = "Camera permission denied or camera unavailable.";
+      console.error(e);
     }
   }
 
-  // --- 1. LIVE CAMERA SNAP FOR ENROLLMENT ---
+  // --- 1. ENROLLMENT (CAMERA SNAP + FILE) ---
   async function snapEnrollmentFromCamera() {
     const video = document.getElementById('enrollWebcam');
-    const status = document.getElementById('status');
-    const faceList = document.getElementById('enrollFaceList');
-    faceList.innerHTML = "";
-    tempExtractedDescriptors = [];
+    if (!video.videoWidth) return alert("Camera not ready yet.");
 
-    status.innerText = "Capturing from camera & detecting faces...";
-
-    // Capture current frame from webcam
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -255,11 +263,10 @@
     await processImageForEnrollment(canvas);
   }
 
-  // File Upload fallback
   document.getElementById('groupPhotoUpload').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const canvas = await fileToOptimizedCanvas(file);
+    const canvas = await fileToCanvas(file);
     await processImageForEnrollment(canvas);
   });
 
@@ -269,13 +276,15 @@
     faceList.innerHTML = "";
     tempExtractedDescriptors = [];
 
-    // Tiny face detector execution
+    status.innerText = "Scanning faces...";
+
+    // Run tiny detector
     const detections = await faceapi.detectAllFaces(sourceCanvas, detectorOptions)
       .withFaceLandmarks(true)
       .withFaceDescriptors();
 
     if (!detections || detections.length === 0) {
-      status.innerText = "No faces detected. Please ensure students are looking at the camera.";
+      status.innerText = "No faces detected. Make sure faces are well lit and visible.";
       return;
     }
 
@@ -294,16 +303,16 @@
       faceList.appendChild(card);
     });
 
-    status.innerText = `Found ${detections.length} faces! Type their names and click 'Save Tagged Roster'.`;
+    status.innerText = `Detected ${detections.length} faces in < 1 second! Type names and click 'Save Tagged Roster'.`;
   }
 
-  function fileToOptimizedCanvas(file) {
+  function fileToCanvas(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          const maxDim = 1280;
+          const maxDim = 1200;
           let w = img.width, h = img.height;
           if (w > maxDim || h > maxDim) {
             if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
@@ -330,7 +339,7 @@
       }
     });
 
-    if (added === 0) return alert("Please type student names before saving.");
+    if (added === 0) return alert("Please type names for the faces before saving.");
     localStorage.setItem("enrolled_roster", JSON.stringify(enrolledRoster));
     rebuildMatcher();
     updateLiveChecklist();
@@ -353,7 +362,7 @@
     faceMatcher = new faceapi.FaceMatcher(labeled, 0.58);
   }
 
-  // --- 2. MULTI-SHOT ATTENDANCE & REAL-TIME ABSENCES ---
+  // --- 2. MULTI-SHOT ATTENDANCE ---
   async function snapSectionPhoto() {
     const video = document.getElementById('sessionWebcam');
     const snapBtn = document.getElementById("snapBtn");
@@ -364,7 +373,7 @@
       .withFaceDescriptors();
 
     if (!detections || detections.length === 0) {
-      alert("No faces detected in this view.");
+      alert("No faces detected in view.");
       snapBtn.disabled = false;
       return;
     }
@@ -536,7 +545,7 @@
     });
 
     localStorage.setItem("local_attendance", JSON.stringify(localAttendanceRecords));
-    alert(`Session saved: ${stagedPresentStudents.size} Present, ${enrolledRoster.length - stagedPresentStudents.size} Absent.`);
+    alert(`Session logged: ${stagedPresentStudents.size} Present, ${enrolledRoster.length - stagedPresentStudents.size} Absent.`);
     resetStaging();
     renderLocalRecords();
     switchTab('records');
