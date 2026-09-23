@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Yahin Smart Attendance</title>
-  <!-- Load MediaPipe Face Detection from official CDN -->
+  <!-- MediaPipe Face Detection -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
   <style>
@@ -16,60 +17,71 @@
       --card-bg: #ffffff;
       --text: #0f172a;
     }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 16px; background: var(--bg); color: var(--text); }
-    .container { max-width: 1040px; margin: 0 auto; background: var(--card-bg); padding: 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 12px; background: var(--bg); color: var(--text); }
+    .container { max-width: 900px; margin: 0 auto; background: var(--card-bg); padding: 16px; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
     
-    .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
-    .tab-btn { padding: 9px 18px; border: none; background: #e2e8f0; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; }
+    h2 { margin: 4px 0 14px 0; font-size: 20px; text-align: center; }
+
+    /* Mobile Responsive Navigation Tabs */
+    .tabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; overflow-x: auto; }
+    .tab-btn { flex: 1; padding: 10px 8px; border: none; background: #e2e8f0; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; text-align: center; white-space: nowrap; }
     .tab-btn.active { background: var(--primary); color: white; }
     .section { display: none; }
     .section.active { display: block; }
     
-    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-    .stat-card { background: #f1f5f9; border-radius: 8px; padding: 14px; text-align: center; border-left: 4px solid var(--primary); }
+    /* Stats Grid for Mobile */
+    .stats-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+    @media (min-width: 600px) { .stats-row { grid-template-columns: repeat(4, 1fr); } }
+    .stat-card { background: #f1f5f9; border-radius: 8px; padding: 10px; text-align: center; border-left: 4px solid var(--primary); }
     .stat-card.green { border-color: var(--success); }
     .stat-card.red { border-color: var(--danger); }
     .stat-card.orange { border-color: var(--warning); }
-    .stat-number { font-size: 24px; font-weight: 700; margin-top: 4px; }
-    .stat-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #64748b; }
+    .stat-number { font-size: 20px; font-weight: 700; margin-top: 2px; }
+    .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #64748b; }
 
-    .session-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
-    .camera-wrapper { position: relative; width: 100%; height: 380px; background: #0f172a; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    /* Mobile-First Camera Viewport */
+    .camera-wrapper { position: relative; width: 100%; height: 320px; background: #0f172a; border-radius: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    .roster-checklist { border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; background: #f8fafc; height: 380px; display: flex; flex-direction: column; }
-    .roster-list { overflow-y: auto; flex: 1; margin-top: 8px; }
-    .roster-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; background: white; border: 1px solid #e2e8f0; }
-    .roster-item.present { border-left: 4px solid var(--success); }
-    .roster-item.absent { border-left: 4px solid var(--danger); }
-
-    .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; color: white; background: var(--primary); font-size: 14px; }
+    .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: var(--primary); font-size: 13px; min-height: 42px; }
     .btn-green { background: var(--success); }
     .btn-red { background: var(--danger); }
     .btn-gray { background: #64748b; }
-    .btn-sm { padding: 4px 8px; font-size: 11px; border-radius: 4px; }
+    .btn-sm { padding: 4px 8px; font-size: 11px; min-height: auto; border-radius: 4px; }
     .btn:disabled { background: #94a3b8; cursor: not-allowed; }
 
-    .reel-container { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 10px; min-height: 80px; background: #f8fafc; margin-top: 14px; }
+    .session-layout { display: flex; flex-direction: column; gap: 14px; }
+    @media (min-width: 768px) {
+      .session-layout { display: grid; grid-template-columns: 1fr 320px; }
+    }
+
+    .roster-checklist { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; background: #f8fafc; max-height: 320px; display: flex; flex-direction: column; }
+    .roster-list { overflow-y: auto; flex: 1; margin-top: 8px; }
+    .roster-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; background: white; border: 1px solid #e2e8f0; }
+    .roster-item.present { border-left: 4px solid var(--success); }
+    .roster-item.absent { border-left: 4px solid var(--danger); }
+
+    .reel-container { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 8px; min-height: 80px; background: #f8fafc; margin-top: 10px; }
     .thumbnails { display: flex; gap: 8px; overflow-x: auto; }
-    .thumb-card { flex: 0 0 100px; text-align: center; background: white; padding: 4px; border-radius: 6px; border: 1px solid #cbd5e1; }
+    .thumb-card { flex: 0 0 90px; text-align: center; background: white; padding: 4px; border-radius: 6px; border: 1px solid #cbd5e1; }
     .thumb-card img { width: 100%; height: 60px; object-fit: cover; border-radius: 4px; }
     .thumb-tag { font-size: 10px; font-weight: 600; margin-top: 2px; }
 
-    .unrecognized-box { border: 2px solid #fdba74; background: #fff7ed; padding: 14px; border-radius: 8px; margin-top: 14px; display: none; }
-    .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; max-height: 340px; overflow-y: auto; }
+    .unrecognized-box { border: 2px solid #fdba74; background: #fff7ed; padding: 12px; border-radius: 8px; margin-top: 12px; display: none; }
+    .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; max-height: 300px; overflow-y: auto; }
     .face-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; text-align: center; background: #ffffff; }
-    .face-card canvas { border-radius: 50%; width: 75px; height: 75px; object-fit: cover; border: 2px solid var(--primary); }
-    .face-card input { width: 90%; margin-top: 5px; padding: 5px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; }
+    .face-card canvas { border-radius: 50%; width: 65px; height: 65px; object-fit: cover; border: 2px solid var(--primary); }
+    .face-card input { width: 95%; margin-top: 5px; padding: 6px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; }
 
-    table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
-    th, td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+    th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
     th { background: #f1f5f9; font-weight: 600; }
-    .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
     .badge-present { background: #dcfce7; color: #15803d; }
     .badge-absent { background: #fee2e2; color: #b91c1c; }
-    #status { margin-top: 14px; font-weight: 600; font-size: 13px; color: #1e293b; padding: 8px 12px; background: #e2e8f0; border-radius: 6px; }
+    #status { margin-top: 12px; font-weight: 600; font-size: 12px; color: #1e293b; padding: 8px 10px; background: #e2e8f0; border-radius: 6px; }
   </style>
 </head>
 <body>
@@ -79,22 +91,25 @@
   
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('enroll')">1. Roster Tagging</button>
-    <button class="tab-btn" onclick="switchTab('attend')">2. Live Class Session</button>
-    <button class="tab-btn" onclick="switchTab('records')">3. Detailed Log & Absence Matrix</button>
+    <button class="tab-btn" onclick="switchTab('attend')">2. Live Session</button>
+    <button class="tab-btn" onclick="switchTab('records')">3. Records</button>
   </div>
 
-  <!-- TAB 1: FAST GROUP ENROLLMENT -->
+  <!-- TAB 1: ENROLLMENT WITH FLIP CAMERA -->
   <div id="enrollSection" class="section active">
     <div class="toolbar">
-      <button class="btn" id="enrollSnapBtn" onclick="snapEnrollmentFromCamera()">📷 Snap Group Roster from Camera</button>
-      <button class="btn btn-green" onclick="saveEnrolledFaces()">Save Tagged Roster</button>
-      <button class="btn btn-red btn-sm" onclick="clearEntireRoster()">Clear Current Roster</button>
-      <span style="font-size: 12px; color: #64748b; margin-left: 10px;">Or upload group picture:</span>
-      <input type="file" id="groupPhotoUpload" accept="image/*" style="font-size:12px;">
+      <button class="btn" onclick="snapEnrollmentFromCamera()">📷 Snap Group</button>
+      <button class="btn btn-gray" onclick="toggleCamera()">🔄 Flip Camera</button>
+      <button class="btn btn-green" onclick="saveEnrolledFaces()">Save Roster</button>
+      <button class="btn btn-red btn-sm" onclick="clearEntireRoster()">Clear</button>
     </div>
 
-    <div class="camera-wrapper" style="height: 320px;">
+    <div class="camera-wrapper">
       <video id="enrollWebcam" autoplay muted playsinline></video>
+    </div>
+
+    <div style="margin-top: 8px; font-size: 12px; color: #64748b;">
+      Or select image file: <input type="file" id="groupPhotoUpload" accept="image/*" style="font-size:12px;">
     </div>
 
     <div id="enrollFaceList" class="face-grid"></div>
@@ -104,7 +119,7 @@
   <div id="attendSection" class="section">
     <div class="stats-row">
       <div class="stat-card">
-        <div class="stat-label">Enrolled Roster</div>
+        <div class="stat-label">Enrolled</div>
         <div class="stat-number" id="statEnrolled">0</div>
       </div>
       <div class="stat-card green">
@@ -116,17 +131,17 @@
         <div class="stat-number" id="statAbsent" style="color:var(--danger)">0</div>
       </div>
       <div class="stat-card orange">
-        <div class="stat-label">Attendance Rate</div>
+        <div class="stat-label">Rate</div>
         <div class="stat-number" id="statRate">0%</div>
       </div>
     </div>
 
     <div class="toolbar">
-      <label><strong>Class:</strong></label>
-      <input type="text" id="classCode" value="ELS138" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; width:100px;">
-      <button class="btn" id="snapBtn" onclick="snapSectionPhoto()">📷 Snap Section Shot</button>
-      <button class="btn btn-green" id="commitBtn" onclick="commitSessionToLocal()" disabled>💾 Save Session to Records</button>
-      <button class="btn btn-gray" onclick="resetStaging()">Reset Session</button>
+      <input type="text" id="classCode" value="ELS138" style="padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; width:90px; font-size:13px;">
+      <button class="btn" id="snapBtn" onclick="snapSectionPhoto()">📷 Snap Section</button>
+      <button class="btn btn-gray" onclick="toggleCamera()">🔄 Flip</button>
+      <button class="btn btn-green" id="commitBtn" onclick="commitSessionToLocal()" disabled>💾 Save</button>
+      <button class="btn btn-gray btn-sm" onclick="resetStaging()">Reset</button>
     </div>
 
     <div class="session-layout">
@@ -135,64 +150,59 @@
           <video id="sessionWebcam" autoplay muted playsinline></video>
         </div>
         <div class="reel-container">
-          <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:4px;">STAGED SECTION SHOTS:</div>
+          <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:4px;">SESSION EVIDENCE (TO DRIVE):</div>
           <div class="thumbnails" id="stagedThumbs">
-            <span style="color:#94a3b8; font-size:12px;" id="noPhotosMsg">No section photos taken yet.</span>
+            <span style="color:#94a3b8; font-size:12px;" id="noPhotosMsg">No photos taken yet.</span>
           </div>
         </div>
       </div>
 
       <div class="roster-checklist">
-        <div style="font-weight:700; font-size:14px; border-bottom:1px solid #cbd5e1; padding-bottom:6px;">
-          Live Roster Roll Call
+        <div style="font-weight:700; font-size:13px; border-bottom:1px solid #cbd5e1; padding-bottom:6px;">
+          Roll Call Status
         </div>
         <div class="roster-list" id="liveRollList">
-          <span style="color:#94a3b8; font-size:12px;">Enroll students in Tab 1 to activate live tracking.</span>
+          <span style="color:#94a3b8; font-size:12px;">Enroll students in Tab 1 first.</span>
         </div>
       </div>
     </div>
 
     <div id="unrecognizedBox" class="unrecognized-box">
       <h4 style="margin:0 0 6px 0; color:#9a3412;">⚠️ Unregistered Face Detected</h4>
-      <p style="font-size:12px; margin:0 0 8px 0; color:#7c2d12;">Was this student absent during enrollment? Tag them now to enroll them permanently and count them present today:</p>
+      <p style="font-size:12px; margin:0 0 6px 0; color:#7c2d12;">Tag latecomers now to add them permanently:</p>
       <div id="unrecognizedFaceList" class="face-grid"></div>
     </div>
   </div>
 
-  <!-- TAB 3: RECORDS & EXPORT -->
+  <!-- TAB 3: RECORDS & DRIVE EXPORT -->
   <div id="recordsSection" class="section">
     <div class="toolbar" style="justify-content: space-between;">
-      <div style="display:flex; gap:8px;">
-        <button class="btn btn-green" id="exportBtn" onclick="exportToGoogleSheets()">📤 Export to Google Sheets & Drive</button>
-        <button class="btn btn-gray" onclick="exportToCSV()">Download CSV</button>
-      </div>
-      <div>
-        <button class="btn btn-sm btn-gray" onclick="filterRecords('ALL')">All</button>
-        <button class="btn btn-sm btn-green" onclick="filterRecords('Present')">Present Only</button>
-        <button class="btn btn-sm btn-red" onclick="filterRecords('Absent')">Absences Only</button>
-      </div>
+      <button class="btn btn-green" id="exportBtn" onclick="exportToGoogleSheets()">📤 Export to Drive & Sheets</button>
+      <button class="btn btn-gray btn-sm" onclick="exportToCSV()">Download CSV</button>
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Time</th>
-          <th>Class</th>
-          <th>Student Name</th>
-          <th>Status</th>
-          <th>Evidence / Shot</th>
-          <th>Export Status</th>
-        </tr>
-      </thead>
-      <tbody id="recordsBody"></tbody>
-    </table>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Class</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Shot</th>
+            <th>Sync</th>
+          </tr>
+        </thead>
+        <tbody id="recordsBody"></tbody>
+      </table>
+    </div>
   </div>
 
-  <p id="status">Starting camera & MediaPipe AI engine...</p>
+  <p id="status">Starting camera...</p>
 </div>
 
 <script>
+  // --- PASTE YOUR APPS SCRIPT WEB APP URL HERE ---
   const APPS_SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
 
   let enrolledRoster = JSON.parse(localStorage.getItem("enrolled_roster") || "[]");
@@ -202,60 +212,67 @@
   let stagedPresentStudents = new Map();
   let stagedUnknowns = [];
   let tempExtractedFeatures = [];
-  let activeFilter = "ALL";
-  let sharedStream = null;
-
-  // MediaPipe Face Detector instance
+  
+  let currentFacingMode = "environment"; // Defaults to back/rear camera for classrooms
+  let activeStream = null;
   let faceDetector = null;
-  let detectorReady = false;
 
   async function init() {
     await startCamera();
 
-    // Initialize MediaPipe Face Detection
     faceDetector = new FaceDetection({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
     });
 
     faceDetector.setOptions({
-      model: 'full', // Full-range model designed for wide shots, multiple people, and back rows
+      model: 'full',
       minDetectionConfidence: 0.4
     });
 
     await faceDetector.initialize();
-    detectorReady = true;
-
     updateLiveChecklist();
     renderLocalRecords();
-    document.getElementById("status").innerText = `✓ MediaPipe AI Ready. ${enrolledRoster.length} student(s) currently enrolled.`;
+    document.getElementById("status").innerText = `✓ Ready! ${enrolledRoster.length} student(s) in local roster.`;
   }
 
+  // --- CAMERA ENGINE WITH SWITCHABLE LENS ---
   async function startCamera() {
+    if (activeStream) {
+      activeStream.getTracks().forEach(track => track.stop());
+    }
+
     try {
-      sharedStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }
+      activeStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: currentFacingMode,
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
       });
-      document.getElementById('enrollWebcam').srcObject = sharedStream;
-      document.getElementById('sessionWebcam').srcObject = sharedStream;
+      document.getElementById('enrollWebcam').srcObject = activeStream;
+      document.getElementById('sessionWebcam').srcObject = activeStream;
+      document.getElementById("status").innerText = `Camera active (${currentFacingMode === 'user' ? 'Front' : 'Back'} Camera).`;
     } catch (e) {
-      document.getElementById("status").innerText = "Camera permission denied or camera not available.";
-      console.error(e);
+      document.getElementById("status").innerText = "Camera permission denied or camera not found.";
     }
   }
 
-  // --- MEDIAPIPE MULTI-FACE DETECTION WRAPPER ---
-  function detectFacesMediaPipe(imageOrCanvas) {
+  async function toggleCamera() {
+    currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+    await startCamera();
+  }
+
+  // --- MEDIAPIPE FACE DETECTOR ---
+  function detectFacesMediaPipe(canvasElement) {
     return new Promise((resolve) => {
       faceDetector.onResults((results) => {
         if (!results.detections || results.detections.length === 0) {
           resolve([]);
           return;
         }
+        const w = canvasElement.width;
+        const h = canvasElement.height;
 
-        const w = imageOrCanvas.videoWidth || imageOrCanvas.width;
-        const h = imageOrCanvas.videoHeight || imageOrCanvas.height;
-
-        // Convert normalized relative bounding boxes to absolute pixel coordinates
         const boxes = results.detections.map(d => {
           const bb = d.boundingBox;
           return {
@@ -265,15 +282,12 @@
             height: Math.min(h, Math.floor(bb.height * h))
           };
         });
-
         resolve(boxes);
       });
-
-      faceDetector.send({ image: imageOrCanvas });
+      faceDetector.send({ image: canvasElement });
     });
   }
 
-  // Fast biometric color/structure hashing for matching
   function computeFaceFingerprint(canvas) {
     const ctx = canvas.getContext('2d');
     const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -315,7 +329,7 @@
     return Math.sqrt(sum) / v1.length;
   }
 
-  // --- 1. ROSTER ENROLLMENT ---
+  // --- 1. ENROLLMENT ---
   async function snapEnrollmentFromCamera() {
     const video = document.getElementById('enrollWebcam');
     if (!video.videoWidth) return alert("Camera not ready.");
@@ -341,7 +355,7 @@
     faceList.innerHTML = "";
     tempExtractedFeatures = [];
 
-    status.innerText = "Scanning all faces in group photo with MediaPipe...";
+    status.innerText = "Scanning faces with MediaPipe AI...";
     const boxes = await detectFacesMediaPipe(sourceCanvas);
 
     if (boxes.length === 0) {
@@ -354,7 +368,6 @@
       crop.width = 100;
       crop.height = 100;
       const ctx = crop.getContext('2d');
-      // Add slight padding to face bounding box
       const pad = Math.floor(box.width * 0.1);
       ctx.drawImage(
         sourceCanvas,
@@ -380,7 +393,7 @@
       faceList.appendChild(card);
     });
 
-    status.innerText = `Detected ALL ${boxes.length} people in photo! Type their names and click 'Save Tagged Roster'.`;
+    status.innerText = `Found ${boxes.length} people! Type names and click 'Save Roster'.`;
   }
 
   function fileToCanvas(file) {
@@ -416,10 +429,10 @@
       }
     });
 
-    if (added === 0) return alert("Please type student names before saving.");
+    if (added === 0) return alert("Please type student names first.");
     localStorage.setItem("enrolled_roster", JSON.stringify(enrolledRoster));
     updateLiveChecklist();
-    alert(`Successfully enrolled ${added} student(s). Total roster: ${enrolledRoster.length}`);
+    alert(`Enrolled ${added} student(s). Total roster: ${enrolledRoster.length}`);
   }
 
   function clearEntireRoster() {
@@ -484,7 +497,7 @@
     const thumbs = document.getElementById("stagedThumbs");
     const thumbCard = document.createElement("div");
     thumbCard.className = "thumb-card";
-    thumbCard.innerHTML = `<img src="${imgBase64}"><div class="thumb-tag">Shot ${shotIdx + 1} (${boxes.length} faces)</div>`;
+    thumbCard.innerHTML = `<img src="${imgBase64}"><div class="thumb-tag">Shot ${shotIdx + 1} (${boxes.length})</div>`;
     thumbs.appendChild(thumbCard);
 
     renderUnrecognizedCards();
@@ -509,10 +522,10 @@
       item.innerHTML = `
         <div>
           <strong>${student.name}</strong>
-          <div style="font-size:10px; color:#64748b;">${isPresent ? 'Detected Present' : 'Absent'}</div>
+          <div style="font-size:10px; color:#64748b;">${isPresent ? 'Present' : 'Absent'}</div>
         </div>
         <div>
-          ${!isPresent ? `<button class="btn btn-sm btn-gray" onclick="manualMarkPresent('${student.name}')">Mark Present</button>` : `<span style="color:var(--success); font-weight:700;">✓</span>`}
+          ${!isPresent ? `<button class="btn btn-sm btn-gray" onclick="manualMarkPresent('${student.name}')">Mark</button>` : `<span style="color:var(--success); font-weight:700;">✓</span>`}
         </div>
       `;
       rollList.appendChild(item);
@@ -558,7 +571,7 @@
       const btn = document.createElement("button");
       btn.className = "btn btn-green btn-sm";
       btn.style.marginTop = "4px";
-      btn.innerText = "Tag & Enroll";
+      btn.innerText = "Enroll";
       btn.onclick = () => tagLatecomer(index);
       card.appendChild(btn);
 
@@ -619,7 +632,7 @@
     });
 
     localStorage.setItem("local_attendance", JSON.stringify(localAttendanceRecords));
-    alert(`Session saved: ${stagedPresentStudents.size} Present, ${enrolledRoster.length - stagedPresentStudents.size} Absent.`);
+    alert(`Logged: ${stagedPresentStudents.size} Present, ${enrolledRoster.length - stagedPresentStudents.size} Absent.`);
     resetStaging();
     renderLocalRecords();
     switchTab('records');
@@ -635,30 +648,19 @@
     updateLiveChecklist();
   }
 
-  function filterRecords(type) {
-    activeFilter = type;
-    renderLocalRecords();
-  }
-
   function renderLocalRecords() {
     const tbody = document.getElementById("recordsBody");
     tbody.innerHTML = "";
 
-    const filtered = localAttendanceRecords.filter(r => {
-      if (activeFilter === "ALL") return true;
-      return r.status === activeFilter;
-    });
-
-    filtered.forEach(r => {
+    localAttendanceRecords.forEach(r => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${r.date}</td>
-        <td>${r.time}</td>
         <td>${r.classCode}</td>
         <td><strong>${r.name}</strong></td>
         <td><span class="badge ${r.status === 'Present' ? 'badge-present' : 'badge-absent'}">${r.status}</span></td>
         <td>${r.photoIndex >= 0 ? `Shot ${r.photoIndex + 1}` : '—'}</td>
-        <td><span style="font-size:11px; font-weight:600; color:${r.synced ? '#15803d' : '#b45309'}">${r.synced ? 'Exported' : 'Pending'}</span></td>
+        <td><span style="font-size:10px; font-weight:700; color:${r.synced ? '#15803d' : '#b45309'}">${r.synced ? 'Synced' : 'Pending'}</span></td>
       `;
       tbody.appendChild(tr);
     });
@@ -670,8 +672,9 @@
 
     const btn = document.getElementById("exportBtn");
     btn.disabled = true;
-    btn.innerText = "Exporting to Sheets...";
+    btn.innerText = "Exporting to Drive & Sheets...";
 
+    // Collect all unique snapshots captured during sessions
     const imagesToUpload = Array.from(new Set(pending.map(p => p.imageBase64).filter(Boolean)));
     const imgMap = new Map();
     imagesToUpload.forEach((img, idx) => imgMap.set(img, idx));
@@ -681,7 +684,7 @@
       time: p.time,
       classCode: p.classCode,
       name: p.name,
-      notes: p.status,
+      status: p.status,
       photoIndex: p.imageBase64 ? (imgMap.get(p.imageBase64) ?? 0) : -1
     }));
 
@@ -701,12 +704,12 @@
       pending.forEach(p => p.synced = true);
       localStorage.setItem("local_attendance", JSON.stringify(localAttendanceRecords));
       renderLocalRecords();
-      alert(`Exported ${pending.length} attendance records!`);
+      alert(`Exported ${pending.length} records. Images saved to Google Drive!`);
     } catch (e) {
       alert("Export failed: " + e.message);
     } finally {
       btn.disabled = false;
-      btn.innerText = "📤 Export to Google Sheets & Drive";
+      btn.innerText = "📤 Export to Drive & Sheets";
     }
   }
 
@@ -720,7 +723,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `attendance_matrix_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `attendance_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
   }
 
