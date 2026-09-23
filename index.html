@@ -2,132 +2,211 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Attendance Web Manager</title>
+  <title>Smart Class Attendance & Absence Manager</title>
   <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #f8fafc; color: #0f172a; }
-    .container { max-width: 950px; margin: 0 auto; background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+    :root {
+      --primary: #2563eb;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 16px; background: var(--bg); color: var(--text); }
+    .container { max-width: 1020px; margin: 0 auto; background: var(--card-bg); padding: 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    
+    /* Navigation Tabs */
     .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
-    .tab-btn { padding: 9px 18px; border: none; background: #e2e8f0; border-radius: 6px; cursor: pointer; font-weight: 600; }
-    .tab-btn.active { background: #2563eb; color: white; }
+    .tab-btn { padding: 9px 18px; border: none; background: #e2e8f0; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; }
+    .tab-btn.active { background: var(--primary); color: white; }
     .section { display: none; }
     .section.active { display: block; }
     
-    .camera-wrapper { position: relative; width: 640px; height: 440px; margin: 0 auto 16px; background: #000; border-radius: 8px; overflow: hidden; }
+    /* Stat Cards */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: #f1f5f9; border-radius: 8px; padding: 14px; text-align: center; border-left: 4px solid var(--primary); }
+    .stat-card.green { border-color: var(--success); }
+    .stat-card.red { border-color: var(--danger); }
+    .stat-card.orange { border-color: var(--warning); }
+    .stat-number { font-size: 24px; font-weight: 700; margin-top: 4px; }
+    .stat-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #64748b; }
+
+    /* Live Session Grid */
+    .session-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
+    .camera-wrapper { position: relative; width: 100%; height: 380px; background: #000; border-radius: 8px; overflow: hidden; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    .toolbar { display: flex; gap: 10px; align-items: center; justify-content: flex-start; margin-bottom: 16px; flex-wrap: wrap; }
-    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; color: white; background: #2563eb; font-size: 14px; }
-    .btn-green { background: #16a34a; }
-    .btn-red { background: #dc2626; }
+    .roster-checklist { border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; background: #f8fafc; height: 380px; display: flex; flex-direction: column; }
+    .roster-list { overflow-y: auto; flex: 1; margin-top: 8px; }
+    .roster-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; background: white; border: 1px solid #e2e8f0; }
+    .roster-item.present { border-left: 4px solid var(--success); }
+    .roster-item.absent { border-left: 4px solid var(--danger); }
+
+    /* Buttons & Controls */
+    .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; color: white; background: var(--primary); font-size: 14px; }
+    .btn-green { background: var(--success); }
+    .btn-red { background: var(--danger); }
     .btn-gray { background: #64748b; }
+    .btn-sm { padding: 3px 8px; font-size: 11px; border-radius: 4px; }
     .btn:disabled { background: #94a3b8; cursor: not-allowed; }
 
-    .reel-container { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 12px; min-height: 90px; background: #f8fafc; margin-bottom: 16px; }
-    .thumbnails { display: flex; gap: 10px; overflow-x: auto; }
-    .thumb-card { flex: 0 0 110px; text-align: center; background: white; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; }
-    .thumb-card img { width: 100%; height: 70px; object-fit: cover; border-radius: 4px; }
-    .thumb-tag { font-size: 11px; font-weight: 600; margin-top: 4px; }
+    /* Reel & Unrecognized */
+    .reel-container { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 10px; min-height: 80px; background: #f8fafc; margin-top: 14px; }
+    .thumbnails { display: flex; gap: 8px; overflow-x: auto; }
+    .thumb-card { flex: 0 0 100px; text-align: center; background: white; padding: 4px; border-radius: 6px; border: 1px solid #cbd5e1; }
+    .thumb-card img { width: 100%; height: 60px; object-fit: cover; border-radius: 4px; }
+    .thumb-tag { font-size: 10px; font-weight: 600; margin-top: 2px; }
 
-    .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-top: 16px; max-height: 380px; overflow-y: auto; }
-    .face-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; text-align: center; background: #f8fafc; }
-    .face-card canvas { border-radius: 50%; width: 75px; height: 75px; object-fit: cover; border: 2px solid #3b82f6; }
-    .face-card input { width: 90%; margin-top: 6px; padding: 5px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; }
-    
-    /* Attendance Local Table */
-    table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
-    th, td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
+    .unrecognized-box { border: 2px solid #fdba74; background: #fff7ed; padding: 14px; border-radius: 8px; margin-top: 14px; display: none; }
+    .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; max-height: 250px; overflow-y: auto; }
+    .face-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; text-align: center; background: #ffffff; }
+    .face-card canvas { border-radius: 50%; width: 70px; height: 70px; object-fit: cover; border: 2px solid var(--primary); }
+    .face-card input { width: 90%; margin-top: 5px; padding: 4px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+    th, td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; }
     th { background: #f1f5f9; font-weight: 600; }
-    tr:nth-child(even) { background: #fcfcfc; }
-    .badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-    .badge-synced { background: #dcfce7; color: #15803d; }
-    .badge-pending { background: #fef3c7; color: #b45309; }
-    #status { margin-top: 14px; font-weight: 600; font-size: 14px; color: #475569; }
+    .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .badge-present { background: #dcfce7; color: #15803d; }
+    .badge-absent { background: #fee2e2; color: #b91c1c; }
+    #status { margin-top: 14px; font-weight: 600; font-size: 13px; color: #475569; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>Smart Face Attendance System</h2>
+  <h2>Smart Face Attendance & Absence System</h2>
   
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('enroll')">1. Tag & Enroll Roster</button>
-    <button class="tab-btn" onclick="switchTab('attend')">2. Take Attendance</button>
-    <button class="tab-btn" onclick="switchTab('records')">3. Local Records & Export</button>
+    <button class="tab-btn active" onclick="switchTab('enroll')">1. Roster Tagging</button>
+    <button class="tab-btn" onclick="switchTab('attend')">2. Live Class Session</button>
+    <button class="tab-btn" onclick="switchTab('records')">3. Detailed Log & Absence Matrix</button>
   </div>
 
-  <!-- TAB 1: ENROLLMENT -->
+  <!-- TAB 1: INITIAL ENROLLMENT -->
   <div id="enrollSection" class="section active">
-    <p>Upload a group photo to detect, crop, and name each student.</p>
+    <p>Upload a group photo to automatically crop and name each student. (High-res images will be optimized automatically).</p>
     <div style="display:flex; gap:10px; margin-bottom:12px;">
       <input type="file" id="groupPhotoUpload" accept="image/*">
       <button class="btn btn-green" onclick="saveEnrolledFaces()">Save Tagged Roster</button>
+      <button class="btn btn-red btn-sm" onclick="clearEntireRoster()">Clear Current Roster</button>
     </div>
-    <div id="faceList" class="face-grid"></div>
+    <div id="enrollFaceList" class="face-grid"></div>
   </div>
 
-  <!-- TAB 2: TAKE ATTENDANCE -->
+  <!-- TAB 2: LIVE ATTENDANCE SESSION -->
   <div id="attendSection" class="section">
+    <!-- Live Session Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Enrolled Roster</div>
+        <div class="stat-number" id="statEnrolled">0</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Present</div>
+        <div class="stat-number" id="statPresent" style="color:var(--success)">0</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Absent</div>
+        <div class="stat-number" id="statAbsent" style="color:var(--danger)">0</div>
+      </div>
+      <div class="stat-card orange">
+        <div class="stat-label">Attendance Rate</div>
+        <div class="stat-number" id="statRate">0%</div>
+      </div>
+    </div>
+
     <div class="toolbar">
       <label><strong>Class:</strong></label>
-      <input type="text" id="classCode" value="ELS138" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px;">
-      <button class="btn" id="snapBtn" onclick="snapSectionPhoto()">📷 Snap Section</button>
-      <button class="btn btn-green" id="saveLocalBtn" onclick="commitSessionToLocal()" disabled>💾 Save to Webpage Records (<span id="countDisplay">0</span>)</button>
-      <button class="btn btn-gray" onclick="resetStaging()">Clear</button>
+      <input type="text" id="classCode" value="ELS138" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; width:100px;">
+      <button class="btn" id="snapBtn" onclick="snapSectionPhoto()">📷 Snap Section Shot</button>
+      <button class="btn btn-green" id="commitBtn" onclick="commitSessionToLocal()" disabled>💾 Save Session to Local Records</button>
+      <button class="btn btn-gray" onclick="resetStaging()">Reset Session</button>
     </div>
 
-    <div class="camera-wrapper">
-      <video id="webcam" autoplay muted playsinline></video>
-    </div>
-
-    <div class="reel-container">
-      <div style="font-size:12px; font-weight:700; color:#64748b; margin-bottom:6px;">STAGED SHOTS:</div>
-      <div class="thumbnails" id="stagedThumbs">
-        <span style="color:#94a3b8; font-size:13px;" id="noPhotosMsg">No photos taken yet for this session.</span>
+    <div class="session-layout">
+      <!-- Left: Camera & Reel -->
+      <div>
+        <div class="camera-wrapper">
+          <video id="webcam" autoplay muted playsinline></video>
+        </div>
+        <div class="reel-container">
+          <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:4px;">STAGED SECTION SHOTS:</div>
+          <div class="thumbnails" id="stagedThumbs">
+            <span style="color:#94a3b8; font-size:12px;" id="noPhotosMsg">No section photos taken yet. Aim and click "Snap Section Shot".</span>
+          </div>
+        </div>
       </div>
+
+      <!-- Right: Real-time Attendance & Absences Checklist -->
+      <div class="roster-checklist">
+        <div style="font-weight:700; font-size:14px; border-bottom:1px solid #cbd5e1; padding-bottom:6px;">
+          Live Roster Roll Call
+        </div>
+        <div class="roster-list" id="liveRollList">
+          <span style="color:#94a3b8; font-size:12px;">Enroll students in Tab 1 to activate live tracking.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- On-the-Fly Tagging for Absentees/Latecomers -->
+    <div id="unrecognizedBox" class="unrecognized-box">
+      <h4 style="margin:0 0 6px 0; color:#9a3412;">⚠️ Unregistered Face Detected</h4>
+      <p style="font-size:12px; margin:0 0 8px 0; color:#7c2d12;">Was this student absent during enrollment? Tag them now to enroll them permanently and count them present today:</p>
+      <div id="unrecognizedFaceList" class="face-grid"></div>
     </div>
   </div>
 
-  <!-- TAB 3: RECORDS & EXPORT -->
+  <!-- TAB 3: DETAILED RECORDS & ABSENCES -->
   <div id="recordsSection" class="section">
     <div class="toolbar" style="justify-content: space-between;">
-      <div>
-        <button class="btn btn-green" id="exportBtn" onclick="exportToGoogleSheets()">📤 Export Pending Records to Google Sheet</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-green" id="exportBtn" onclick="exportToGoogleSheets()">📤 Export to Google Sheets & Drive</button>
         <button class="btn btn-gray" onclick="exportToCSV()">Download CSV</button>
       </div>
-      <button class="btn btn-red" onclick="clearLocalHistory()">Clear Local Database</button>
+      <div>
+        <button class="btn btn-sm btn-gray" onclick="filterRecords('ALL')">All</button>
+        <button class="btn btn-sm btn-green" onclick="filterRecords('Present')">Present Only</button>
+        <button class="btn btn-sm btn-red" onclick="filterRecords('Absent')">Absences Only</button>
+      </div>
     </div>
-    
-    <table id="recordsTable">
+
+    <table>
       <thead>
         <tr>
           <th>Date</th>
           <th>Time</th>
           <th>Class</th>
           <th>Student Name</th>
-          <th>Section Shot</th>
           <th>Status</th>
+          <th>Evidence / Shot</th>
+          <th>Export Status</th>
         </tr>
       </thead>
       <tbody id="recordsBody"></tbody>
     </table>
   </div>
 
-  <p id="status">Loading facial detection models...</p>
+  <p id="status">Loading neural network models...</p>
 </div>
 
 <script>
+  // --- CONFIGURATION ---
   const APPS_SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
 
-  // Persistent browser state via localStorage
   let enrolledRoster = JSON.parse(localStorage.getItem("enrolled_roster") || "[]");
   let localAttendanceRecords = JSON.parse(localStorage.getItem("local_attendance") || "[]");
   
-  // Staging for the active classroom session
   let stagedImages = [];
-  let stagedAttendees = new Map(); // key: studentName -> { photoIndex }
+  let stagedPresentStudents = new Map(); // name -> { photoIndex }
+  let stagedUnknowns = [];
   let faceMatcher = null;
   let tempExtractedDescriptors = [];
+  let activeFilter = "ALL";
 
   async function init() {
     const status = document.getElementById("status");
@@ -139,40 +218,40 @@
 
       rebuildMatcher();
       startWebcam();
+      updateLiveChecklist();
       renderLocalRecords();
-      status.innerText = `System ready. ${enrolledRoster.length} students enrolled locally.`;
+      status.innerText = `Models loaded. Roster: ${enrolledRoster.length} student(s) enrolled.`;
     } catch (err) {
-      status.innerText = "Error loading models: " + err.message;
+      status.innerText = "Model error: " + err.message;
     }
   }
 
   async function startWebcam() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: { ideal: 1920 }, height: { ideal: 1080 } } 
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1920 }, height: { ideal: 1080 } } });
       document.getElementById('webcam').srcObject = stream;
     } catch (e) {
-      console.warn("Camera access failed:", e);
+      console.warn("Camera failed:", e);
     }
   }
 
-  // --- 1. ENROLLMENT ---
+  // --- 1. ENROLLMENT & RESIZING WORKAROUND ---
   document.getElementById('groupPhotoUpload').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const status = document.getElementById("status");
-    const faceList = document.getElementById("faceList");
+    const faceList = document.getElementById("enrollFaceList");
     faceList.innerHTML = "";
     tempExtractedDescriptors = [];
-    status.innerText = "Extracting faces...";
+    status.innerText = "Optimizing image resolution & scanning faces...";
 
-    const img = await faceapi.bufferToImage(file);
+    // Scale image down to max 1600px width so face-api doesn't crash on high-res camera uploads
+    const img = await fileToOptimizedImage(file);
     const detections = await faceapi.detectAllFaces(img).withFaceLandmarks().withFaceDescriptors();
 
     if (detections.length === 0) {
-      status.innerText = "No faces found in photo.";
+      status.innerText = "No faces found in this picture. Ensure faces are clearly visible.";
       return;
     }
 
@@ -186,28 +265,65 @@
       const input = document.createElement("input");
       input.type = "text";
       input.placeholder = `Student ${i + 1}`;
-      input.id = `tag_name_${i}`;
+      input.id = `tag_${i}`;
       card.appendChild(input);
       faceList.appendChild(card);
     });
 
-    status.innerText = `Detected ${detections.length} faces. Fill in names and click 'Save Tagged Roster'.`;
+    status.innerText = `Detected ${detections.length} faces! Name each student and click 'Save Tagged Roster'.`;
   });
+
+  // Helper to downscale massive 4K/Webcam pictures
+  function fileToOptimizedImage(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const tempImg = new Image();
+        tempImg.onload = () => {
+          const maxDim = 1600;
+          let w = tempImg.width, h = tempImg.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+            else { w = Math.round((w * maxDim) / h); h = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
+          const scaledImg = new Image();
+          scaledImg.onload = () => resolve(scaledImg);
+          scaledImg.src = canvas.toDataURL('image/jpeg', 0.9);
+        };
+        tempImg.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
   function saveEnrolledFaces() {
     let added = 0;
     tempExtractedDescriptors.forEach((desc, i) => {
-      const name = document.getElementById(`tag_name_${i}`)?.value.trim();
+      const name = document.getElementById(`tag_${i}`)?.value.trim();
       if (name) {
         enrolledRoster.push({ name: name, descriptor: desc });
         added++;
       }
     });
 
-    if (added === 0) return alert("Please type at least one name.");
+    if (added === 0) return alert("Please type names for the faces before saving.");
     localStorage.setItem("enrolled_roster", JSON.stringify(enrolledRoster));
     rebuildMatcher();
-    alert(`Enrolled ${added} students. Total: ${enrolledRoster.length}`);
+    updateLiveChecklist();
+    alert(`Successfully enrolled ${added} student(s). Total: ${enrolledRoster.length}`);
+  }
+
+  function clearEntireRoster() {
+    if (confirm("Delete the current enrolled roster? You will need to tag students again.")) {
+      enrolledRoster = [];
+      localStorage.removeItem("enrolled_roster");
+      rebuildMatcher();
+      updateLiveChecklist();
+      document.getElementById("enrollFaceList").innerHTML = "";
+    }
   }
 
   function rebuildMatcher() {
@@ -216,22 +332,19 @@
     faceMatcher = new faceapi.FaceMatcher(labeled, 0.55);
   }
 
-  // --- 2. MULTI-SHOT CAPTURE ---
+  // --- 2. MULTI-SHOT & LIVE ABSENCE LOGIC ---
   async function snapSectionPhoto() {
-    if (!faceMatcher) return alert("Enroll students in Tab 1 first.");
-
     const video = document.getElementById('webcam');
     const snapBtn = document.getElementById("snapBtn");
     snapBtn.disabled = true;
 
     const detections = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors();
     if (detections.length === 0) {
-      alert("No faces detected in this view.");
+      alert("No faces detected in view. Reposition the camera.");
       snapBtn.disabled = false;
       return;
     }
 
-    // Capture to Base64
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -241,16 +354,25 @@
     const shotIdx = stagedImages.length;
     stagedImages.push(imgBase64);
 
-    // Identify & deduplicate
-    detections.forEach(det => {
-      const match = faceMatcher.findBestMatch(det.descriptor);
-      const name = (match && match.label !== "unknown") ? match.label : `Unregistered Face`;
-      if (!stagedAttendees.has(name)) {
-        stagedAttendees.set(name, { photoIndex: shotIdx });
+    const faceCanvases = await faceapi.extractFaces(video, detections);
+
+    detections.forEach((det, i) => {
+      let match = faceMatcher ? faceMatcher.findBestMatch(det.descriptor) : null;
+      if (match && match.label !== "unknown") {
+        if (!stagedPresentStudents.has(match.label)) {
+          stagedPresentStudents.set(match.label, { photoIndex: shotIdx });
+        }
+      } else {
+        stagedUnknowns.push({
+          tempId: `unknown_${Date.now()}_${i}`,
+          descriptor: Array.from(det.descriptor),
+          canvas: faceCanvases[i],
+          photoIndex: shotIdx
+        });
       }
     });
 
-    // Update UI thumbnail
+    // Add thumbnail to reel
     document.getElementById("noPhotosMsg")?.remove();
     const thumbs = document.getElementById("stagedThumbs");
     const thumbCard = document.createElement("div");
@@ -258,33 +380,145 @@
     thumbCard.innerHTML = `<img src="${imgBase64}"><div class="thumb-tag">Shot ${shotIdx + 1} (${detections.length} faces)</div>`;
     thumbs.appendChild(thumbCard);
 
-    document.getElementById("countDisplay").innerText = stagedAttendees.size;
-    document.getElementById("saveLocalBtn").disabled = false;
+    renderUnrecognizedCards();
+    updateLiveChecklist();
+    document.getElementById("commitBtn").disabled = false;
     snapBtn.disabled = false;
   }
 
-  // Commit from live camera staging to the local webpage database
+  // Real-time calculation of Present vs Absent students
+  function updateLiveChecklist() {
+    const rollList = document.getElementById("liveRollList");
+    rollList.innerHTML = "";
+
+    const total = enrolledRoster.length;
+    let presentCount = 0;
+
+    enrolledRoster.forEach(student => {
+      const isPresent = stagedPresentStudents.has(student.name);
+      if (isPresent) presentCount++;
+
+      const item = document.createElement("div");
+      item.className = `roster-item ${isPresent ? 'present' : 'absent'}`;
+      item.innerHTML = `
+        <div>
+          <strong>${student.name}</strong>
+          <div style="font-size:10px; color:#64748b;">${isPresent ? 'Detected Present' : 'Absent'}</div>
+        </div>
+        <div>
+          ${!isPresent ? `<button class="btn btn-sm btn-gray" onclick="manualMarkPresent('${student.name}')">Mark Present</button>` : `<span style="color:var(--success); font-weight:700;">✓</span>`}
+        </div>
+      `;
+      rollList.appendChild(item);
+    });
+
+    const absentCount = total - presentCount;
+    const rate = total > 0 ? Math.round((presentCount / total) * 100) : 0;
+
+    document.getElementById("statEnrolled").innerText = total;
+    document.getElementById("statPresent").innerText = presentCount;
+    document.getElementById("statAbsent").innerText = absentCount;
+    document.getElementById("statRate").innerText = `${rate}%`;
+  }
+
+  function manualMarkPresent(name) {
+    stagedPresentStudents.set(name, { photoIndex: 0 });
+    updateLiveChecklist();
+    document.getElementById("commitBtn").disabled = false;
+  }
+
+  function renderUnrecognizedCards() {
+    const box = document.getElementById("unrecognizedBox");
+    const list = document.getElementById("unrecognizedFaceList");
+    list.innerHTML = "";
+
+    if (stagedUnknowns.length === 0) {
+      box.style.display = "none";
+      return;
+    }
+
+    box.style.display = "block";
+    stagedUnknowns.forEach((item, index) => {
+      const card = document.createElement("div");
+      card.className = "face-card";
+      card.appendChild(item.canvas);
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "Student Name";
+      input.id = `unrec_${item.tempId}`;
+      card.appendChild(input);
+
+      const btn = document.createElement("button");
+      btn.className = "btn btn-green btn-sm";
+      btn.style.marginTop = "4px";
+      btn.innerText = "Tag & Enroll";
+      btn.onclick = () => tagLatecomer(index);
+      card.appendChild(btn);
+
+      list.appendChild(card);
+    });
+  }
+
+  function tagLatecomer(index) {
+    const item = stagedUnknowns[index];
+    const name = document.getElementById(`unrec_${item.tempId}`)?.value.trim();
+    if (!name) return alert("Enter student name.");
+
+    // Enroll permanently
+    enrolledRoster.push({ name: name, descriptor: item.descriptor });
+    localStorage.setItem("enrolled_roster", JSON.stringify(enrolledRoster));
+    rebuildMatcher();
+
+    // Mark present today
+    stagedPresentStudents.set(name, { photoIndex: item.photoIndex });
+    stagedUnknowns.splice(index, 1);
+
+    renderUnrecognizedCards();
+    updateLiveChecklist();
+  }
+
+  // --- 3. COMMIT & EXPORT LOGIC ---
   function commitSessionToLocal() {
     const classCode = document.getElementById("classCode").value.trim() || "GENERAL";
     const now = new Date();
     const dateStr = now.toISOString().split("T")[0];
     const timeStr = now.toTimeString().split(" ")[0];
 
-    stagedAttendees.forEach((val, name) => {
+    // Log Present Students
+    stagedPresentStudents.forEach((val, name) => {
       localAttendanceRecords.unshift({
         id: Date.now() + Math.random(),
         date: dateStr,
         time: timeStr,
         classCode: classCode,
         name: name,
+        status: "Present",
         photoIndex: val.photoIndex,
-        imageBase64: stagedImages[val.photoIndex], // Cached locally
+        imageBase64: stagedImages[val.photoIndex] || null,
         synced: false
       });
     });
 
+    // Automatically Log Absent Students from Roster
+    enrolledRoster.forEach(student => {
+      if (!stagedPresentStudents.has(student.name)) {
+        localAttendanceRecords.unshift({
+          id: Date.now() + Math.random(),
+          date: dateStr,
+          time: timeStr,
+          classCode: classCode,
+          name: student.name,
+          status: "Absent",
+          photoIndex: -1,
+          imageBase64: null,
+          synced: false
+        });
+      }
+    });
+
     localStorage.setItem("local_attendance", JSON.stringify(localAttendanceRecords));
-    alert(`Committed ${stagedAttendees.size} attendees to webpage records.`);
+    alert(`Session logged: ${stagedPresentStudents.size} Present, ${enrolledRoster.length - stagedPresentStudents.size} Absent.`);
     resetStaging();
     renderLocalRecords();
     switchTab('records');
@@ -292,26 +526,39 @@
 
   function resetStaging() {
     stagedImages = [];
-    stagedAttendees.clear();
-    document.getElementById("stagedThumbs").innerHTML = `<span style="color:#94a3b8; font-size:13px;" id="noPhotosMsg">No photos taken yet for this session.</span>`;
-    document.getElementById("countDisplay").innerText = "0";
-    document.getElementById("saveLocalBtn").disabled = true;
+    stagedPresentStudents.clear();
+    stagedUnknowns = [];
+    document.getElementById("unrecognizedBox").style.display = "none";
+    document.getElementById("stagedThumbs").innerHTML = `<span style="color:#94a3b8; font-size:12px;" id="noPhotosMsg">No section photos taken yet.</span>`;
+    document.getElementById("commitBtn").disabled = true;
+    updateLiveChecklist();
   }
 
-  // --- 3. LOCAL RECORDS VIEW & EXPORT ---
+  // --- 4. RECORDS DISPLAY & FILTERING ---
+  function filterRecords(type) {
+    activeFilter = type;
+    renderLocalRecords();
+  }
+
   function renderLocalRecords() {
     const tbody = document.getElementById("recordsBody");
     tbody.innerHTML = "";
 
-    localAttendanceRecords.forEach(r => {
+    const filtered = localAttendanceRecords.filter(r => {
+      if (activeFilter === "ALL") return true;
+      return r.status === activeFilter;
+    });
+
+    filtered.forEach(r => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${r.date}</td>
         <td>${r.time}</td>
         <td>${r.classCode}</td>
         <td><strong>${r.name}</strong></td>
-        <td>Shot ${r.photoIndex + 1}</td>
-        <td><span class="badge ${r.synced ? 'badge-synced' : 'badge-pending'}">${r.synced ? 'Exported' : 'Pending'}</span></td>
+        <td><span class="badge ${r.status === 'Present' ? 'badge-present' : 'badge-absent'}">${r.status}</span></td>
+        <td>${r.photoIndex >= 0 ? `Shot ${r.photoIndex + 1}` : '—'}</td>
+        <td><span style="font-size:11px; font-weight:600; color:${r.synced ? '#15803d' : '#b45309'}">${r.synced ? 'Exported' : 'Pending'}</span></td>
       `;
       tbody.appendChild(tr);
     });
@@ -319,77 +566,62 @@
 
   async function exportToGoogleSheets() {
     const pending = localAttendanceRecords.filter(r => !r.synced);
-    if (pending.length === 0) {
-      alert("No pending records to export!");
-      return;
-    }
+    if (pending.length === 0) return alert("All records are already synced.");
 
-    const exportBtn = document.getElementById("exportBtn");
-    exportBtn.disabled = true;
-    exportBtn.innerText = "Exporting to Google Sheets...";
+    const btn = document.getElementById("exportBtn");
+    btn.disabled = true;
+    btn.innerText = "Exporting to Sheets...";
 
-    // Extract unique images to upload to Drive
     const imagesToUpload = Array.from(new Set(pending.map(p => p.imageBase64).filter(Boolean)));
-    const imageMap = new Map();
-    imagesToUpload.forEach((img, idx) => imageMap.set(img, idx));
+    const imgMap = new Map();
+    imagesToUpload.forEach((img, idx) => imgMap.set(img, idx));
 
-    const rowsPayload = pending.map(p => ({
+    const rows = pending.map(p => ({
       date: p.date,
       time: p.time,
       classCode: p.classCode,
       name: p.name,
-      notes: "Present",
-      photoIndex: imageMap.get(p.imageBase64) ?? 0
+      notes: p.status, // "Present" or "Absent"
+      photoIndex: p.imageBase64 ? (imgMap.get(p.imageBase64) ?? 0) : -1
     }));
-
-    const payload = {
-      date: pending[0].date,
-      classCode: pending[0].classCode,
-      rows: rowsPayload,
-      images: imagesToUpload
-    };
 
     try {
       await fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          date: pending[0].date,
+          classCode: pending[0].classCode,
+          rows: rows,
+          images: imagesToUpload
+        })
       });
 
-      // Mark records as synced locally
       pending.forEach(p => p.synced = true);
       localStorage.setItem("local_attendance", JSON.stringify(localAttendanceRecords));
       renderLocalRecords();
-      alert(`Successfully exported ${pending.length} record(s) to Google Sheets and Drive!`);
-    } catch (err) {
-      alert("Export failed: " + err.message);
+      alert(`Exported ${pending.length} attendance and absence records!`);
+    } catch (e) {
+      alert("Export failed: " + e.message);
     } finally {
-      exportBtn.disabled = false;
-      exportBtn.innerText = "📤 Export Pending Records to Google Sheet";
+      btn.disabled = false;
+      btn.innerText = "📤 Export to Google Sheets & Drive";
     }
   }
 
   function exportToCSV() {
-    if (localAttendanceRecords.length === 0) return alert("No records to export.");
-    let csv = "Date,Time,Class,Student Name,Shot Index,Synced\n";
+    if (localAttendanceRecords.length === 0) return alert("No records.");
+    let csv = "Date,Time,Class,Student Name,Status,Shot\n";
     localAttendanceRecords.forEach(r => {
-      csv += `"${r.date}","${r.time}","${r.classCode}","${r.name}","Shot ${r.photoIndex + 1}","${r.synced}"\n`;
+      csv += `"${r.date}","${r.time}","${r.classCode}","${r.name}","${r.status}","${r.photoIndex >= 0 ? 'Shot ' + (r.photoIndex + 1) : 'N/A'}"\n`;
     });
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `attendance_backup_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `attendance_matrix_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
-  }
-
-  function clearLocalHistory() {
-    if (confirm("Are you sure you want to clear all local records? (Enrolled roster will remain)")) {
-      localAttendanceRecords = [];
-      localStorage.removeItem("local_attendance");
-      renderLocalRecords();
-    }
   }
 
   function switchTab(tab) {
