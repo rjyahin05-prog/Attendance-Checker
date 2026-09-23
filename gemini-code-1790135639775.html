@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Attendance Web Manager</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #f8fafc; color: #0f172a; }
+    .container { max-width: 950px; margin: 0 auto; background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+    .tab-btn { padding: 9px 18px; border: none; background: #e2e8f0; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .tab-btn.active { background: #2563eb; color: white; }
+    .section { display: none; }
+    .section.active { display: block; }
+    
+    .camera-wrapper { position: relative; width: 640px; height: 440px; margin: 0 auto 16px; background: #000; border-radius: 8px; overflow: hidden; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    
+    .toolbar { display: flex; gap: 10px; align-items: center; justify-content: flex-start; margin-bottom: 16px; flex-wrap: wrap; }
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; color: white; background: #2563eb; font-size: 14px; }
+    .btn-green { background: #16a34a; }
+    .btn-red { background: #dc2626; }
+    .btn-gray { background: #64748b; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    .reel-container { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 12px; min-height: 90px; background: #f8fafc; margin-bottom: 16px; }
+    .thumbnails { display: flex; gap: 10px; overflow-x: auto; }
+    .thumb-card { flex: 0 0 110px; text-align: center; background: white; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; }
+    .thumb-card img { width: 100%; height: 70px; object-fit: cover; border-radius: 4px; }
+    .thumb-tag { font-size: 11px; font-weight: 600; margin-top: 4px; }
+
+    .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-top: 16px; max-height: 380px; overflow-y: auto; }
+    .face-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; text-align: center; background: #f8fafc; }
+    .face-card canvas { border-radius: 50%; width: 75px; height: 75px; object-fit: cover; border: 2px solid #3b82f6; }
+    .face-card input { width: 90%; margin-top: 6px; padding: 5px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; }
+    
+    /* Attendance Local Table */
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+    th, td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
+    th { background: #f1f5f9; font-weight: 600; }
+    tr:nth-child(even) { background: #fcfcfc; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    .badge-synced { background: #dcfce7; color: #15803d; }
+    .badge-pending { background: #fef3c7; color: #b45309; }
+    #status { margin-top: 14px; font-weight: 600; font-size: 14px; color: #475569; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Smart Face Attendance System</h2>
+  
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('enroll')">1. Tag & Enroll Roster</button>
+    <button class="tab-btn" onclick="switchTab('attend')">2. Take Attendance</button>
+    <button class="tab-btn" onclick="switchTab('records')">3. Local Records & Export</button>
+  </div>
+
+  <!-- TAB 1: ENROLLMENT -->
+  <div id="enrollSection" class="section active">
+    <p>Upload a group photo to detect, crop, and name each student.</p>
+    <div style="display:flex; gap:10px; margin-bottom:12px;">
+      <input type="file" id="groupPhotoUpload" accept="image/*">
+      <button class="btn btn-green" onclick="saveEnrolledFaces()">Save Tagged Roster</button>
+    </div>
+    <div id="faceList" class="face-grid"></div>
+  </div>
+
+  <!-- TAB 2: TAKE ATTENDANCE -->
+  <div id="attendSection" class="section">
+    <div class="toolbar">
+      <label><strong>Class:</strong></label>
+      <input type="text" id="classCode" value="ELS138" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px;">
+      <button class="btn" id="snapBtn" onclick="snapSectionPhoto()">📷 Snap Section</button>
+      <button class="btn btn-green" id="saveLocalBtn" onclick="commitSessionToLocal()" disabled>💾 Save to Webpage Records (<span id="countDisplay">0</span>)</button>
+      <button class="btn btn-gray" onclick="resetStaging()">Clear</button>
+    </div>
+
+    <div class="camera-wrapper">
+      <video id="webcam" autoplay muted playsinline></video>
+    </div>
+
+    <div class="reel-container">
+      <div style="font-size:12px; font-weight:700; color:#64748b; margin-bottom:6px;">STAGED SHOTS:</div>
+      <div class="thumbnails" id="stagedThumbs">
+        <span style="color:#94a3b8; font-size:13px;" id="noPhotosMsg">No photos taken yet for this session.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: RECORDS & EXPORT -->
+  <div id="recordsSection" class="section">
+    <div class="toolbar" style="justify-content: space-between;">
+      <div>
+        <button class="btn btn-green" id="exportBtn" onclick="exportToGoogleSheets()">📤 Export Pending Records to Google Sheet</button>
+        <button class="btn btn-gray" onclick="exportToCSV()">Download CSV</button>
+      </div>
+      <button class="btn btn-red" onclick="clearLocalHistory()">Clear Local Database</button>
+    </div>
+    
+    <table id="recordsTable">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Class</th>
+          <th>Student Name</th>
+          <th>Section Shot</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="recordsBody"></tbody>
+    </table>
+  </div>
+
+  <p id="status">Loading facial detection models...</p>
+</div>
+
+<script>
+  const APPS_SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
+
+  // Persistent browser state via localStorage
+  let enrolledRoster = JSON.parse(localStorage.getItem("enrolled_roster") || "[]");
+  let localAttendanceRecords = JSON.parse(localStorage.getItem("local_attendance") || "[]");
+  
+  // Staging for the active classroom session
+  let stagedImages = [];
+  let stagedAttendees = new Map(); // key: studentName -> { photoIndex }
+  let faceMatcher = null;
+  let tempExtractedDescriptors = [];
+
+  async function init() {
+    const status = document.getElementById("status");
+    try {
+      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+      await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
+      rebuildMatcher();
+      startWebcam();
+      renderLocalRecords();
+      status.innerText = `System ready. ${enrolledRoster.length} students enrolled locally.`;
+    } catch (err) {
+      status.innerText = "Error loading models: " + err.message;
+    }
+  }
+
+  async function startWebcam() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 } } 
+      });
+      document.getElementById('webcam').srcObject = stream;
+    } catch (e) {
+      console.warn("Camera access failed:", e);
+    }
+  }
+
+  // --- 1. ENROLLMENT ---
+  document.getElementById('groupPhotoUpload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const status = document.getElementById("status");
+    const faceList = document.getElementById("faceList");
+    faceList.innerHTML = "";
+    tempExtractedDescriptors = [];
+    status.innerText = "Extracting faces...";
+
+    const img = await faceapi.bufferToImage(file);
+    const detections = await faceapi.detectAllFaces(img).withFaceLandmarks().withFaceDescriptors();
+
+    if (detections.length === 0) {
+      status.innerText = "No faces found in photo.";
+      return;
+    }
+
+    const faceCanvases = await faceapi.extractFaces(img, detections);
+    detections.forEach((det, i) => {
+      tempExtractedDescriptors.push(Array.from(det.descriptor));
+      const card = document.createElement("div");
+      card.className = "face-card";
+      card.appendChild(faceCanvases[i]);
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = `Student ${i + 1}`;
+      input.id = `tag_name_${i}`;
+      card.appendChild(input);
+      faceList.appendChild(card);
+    });
+
+    status.innerText = `Detected ${detections.length} faces. Fill in names and click 'Save Tagged Roster'.`;
+  });
+
+  function saveEnrolledFaces() {
+    let added = 0;
+    tempExtractedDescriptors.forEach((desc, i) => {
+      const name = document.getElementById(`tag_name_${i}`)?.value.trim();
+      if (name) {
+        enrolledRoster.push({ name: name, descriptor: desc });
+        added++;
+      }
+    });
+
+    if (added === 0) return alert("Please type at least one name.");
+    localStorage.setItem("enrolled_roster", JSON.stringify(enrolledRoster));
+    rebuildMatcher();
+    alert(`Enrolled ${added} students. Total: ${enrolledRoster.length}`);
+  }
+
+  function rebuildMatcher() {
+    if (enrolledRoster.length === 0) { faceMatcher = null; return; }
+    const labeled = enrolledRoster.map(s => new faceapi.LabeledFaceDescriptors(s.name, [new Float32Array(s.descriptor)]));
+    faceMatcher = new faceapi.FaceMatcher(labeled, 0.55);
+  }
+
+  // --- 2. MULTI-SHOT CAPTURE ---
+  async function snapSectionPhoto() {
+    if (!faceMatcher) return alert("Enroll students in Tab 1 first.");
+
+    const video = document.getElementById('webcam');
+    const snapBtn = document.getElementById("snapBtn");
+    snapBtn.disabled = true;
+
+    const detections = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors();
+    if (detections.length === 0) {
+      alert("No faces detected in this view.");
+      snapBtn.disabled = false;
+      return;
+    }
+
+    // Capture to Base64
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const imgBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+    const shotIdx = stagedImages.length;
+    stagedImages.push(imgBase64);
+
+    // Identify & deduplicate
+    detections.forEach(det => {
+      const match = faceMatcher.findBestMatch(det.descriptor);
+      const name = (match && match.label !== "unknown") ? match.label : `Unregistered Face`;
+      if (!stagedAttendees.has(name)) {
+        stagedAttendees.set(name, { photoIndex: shotIdx });
+      }
+    });
+
+    // Update UI thumbnail
+    document.getElementById("noPhotosMsg")?.remove();
+    const thumbs = document.getElementById("stagedThumbs");
+    const thumbCard = document.createElement("div");
+    thumbCard.className = "thumb-card";
+    thumbCard.innerHTML = `<img src="${imgBase64}"><div class="thumb-tag">Shot ${shotIdx + 1} (${detections.length} faces)</div>`;
+    thumbs.appendChild(thumbCard);
+
+    document.getElementById("countDisplay").innerText = stagedAttendees.size;
+    document.getElementById("saveLocalBtn").disabled = false;
+    snapBtn.disabled = false;
+  }
+
+  // Commit from live camera staging to the local webpage database
+  function commitSessionToLocal() {
+    const classCode = document.getElementById("classCode").value.trim() || "GENERAL";
+    const now = new Date();
+    const dateStr = now.toISOString().split("T")[0];
+    const timeStr = now.toTimeString().split(" ")[0];
+
+    stagedAttendees.forEach((val, name) => {
+      localAttendanceRecords.unshift({
+        id: Date.now() + Math.random(),
+        date: dateStr,
+        time: timeStr,
+        classCode: classCode,
+        name: name,
+        photoIndex: val.photoIndex,
+        imageBase64: stagedImages[val.photoIndex], // Cached locally
+        synced: false
+      });
+    });
+
+    localStorage.setItem("local_attendance", JSON.stringify(localAttendanceRecords));
+    alert(`Committed ${stagedAttendees.size} attendees to webpage records.`);
+    resetStaging();
+    renderLocalRecords();
+    switchTab('records');
+  }
+
+  function resetStaging() {
+    stagedImages = [];
+    stagedAttendees.clear();
+    document.getElementById("stagedThumbs").innerHTML = `<span style="color:#94a3b8; font-size:13px;" id="noPhotosMsg">No photos taken yet for this session.</span>`;
+    document.getElementById("countDisplay").innerText = "0";
+    document.getElementById("saveLocalBtn").disabled = true;
+  }
+
+  // --- 3. LOCAL RECORDS VIEW & EXPORT ---
+  function renderLocalRecords() {
+    const tbody = document.getElementById("recordsBody");
+    tbody.innerHTML = "";
+
+    localAttendanceRecords.forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.date}</td>
+        <td>${r.time}</td>
+        <td>${r.classCode}</td>
+        <td><strong>${r.name}</strong></td>
+        <td>Shot ${r.photoIndex + 1}</td>
+        <td><span class="badge ${r.synced ? 'badge-synced' : 'badge-pending'}">${r.synced ? 'Exported' : 'Pending'}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function exportToGoogleSheets() {
+    const pending = localAttendanceRecords.filter(r => !r.synced);
+    if (pending.length === 0) {
+      alert("No pending records to export!");
+      return;
+    }
+
+    const exportBtn = document.getElementById("exportBtn");
+    exportBtn.disabled = true;
+    exportBtn.innerText = "Exporting to Google Sheets...";
+
+    // Extract unique images to upload to Drive
+    const imagesToUpload = Array.from(new Set(pending.map(p => p.imageBase64).filter(Boolean)));
+    const imageMap = new Map();
+    imagesToUpload.forEach((img, idx) => imageMap.set(img, idx));
+
+    const rowsPayload = pending.map(p => ({
+      date: p.date,
+      time: p.time,
+      classCode: p.classCode,
+      name: p.name,
+      notes: "Present",
+      photoIndex: imageMap.get(p.imageBase64) ?? 0
+    }));
+
+    const payload = {
+      date: pending[0].date,
+      classCode: pending[0].classCode,
+      rows: rowsPayload,
+      images: imagesToUpload
+    };
+
+    try {
+      await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      // Mark records as synced locally
+      pending.forEach(p => p.synced = true);
+      localStorage.setItem("local_attendance", JSON.stringify(localAttendanceRecords));
+      renderLocalRecords();
+      alert(`Successfully exported ${pending.length} record(s) to Google Sheets and Drive!`);
+    } catch (err) {
+      alert("Export failed: " + err.message);
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.innerText = "📤 Export Pending Records to Google Sheet";
+    }
+  }
+
+  function exportToCSV() {
+    if (localAttendanceRecords.length === 0) return alert("No records to export.");
+    let csv = "Date,Time,Class,Student Name,Shot Index,Synced\n";
+    localAttendanceRecords.forEach(r => {
+      csv += `"${r.date}","${r.time}","${r.classCode}","${r.name}","Shot ${r.photoIndex + 1}","${r.synced}"\n`;
+    });
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `attendance_backup_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  }
+
+  function clearLocalHistory() {
+    if (confirm("Are you sure you want to clear all local records? (Enrolled roster will remain)")) {
+      localAttendanceRecords = [];
+      localStorage.removeItem("local_attendance");
+      renderLocalRecords();
+    }
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    if (tab === 'enroll') {
+      document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+      document.getElementById('enrollSection').classList.add('active');
+    } else if (tab === 'attend') {
+      document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+      document.getElementById('attendSection').classList.add('active');
+    } else {
+      document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
+      document.getElementById('recordsSection').classList.add('active');
+    }
+  }
+
+  window.addEventListener('load', init);
+</script>
+</body>
+</html>
